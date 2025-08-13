@@ -207,7 +207,7 @@ async def menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if search_type.startswith("premium_") or search_type.startswith("ultra_"):
         await update.message.reply_text(
             "❌ You are not a Premium/Ultra Premium user.\n"
-            "📞 Contact Developer  https://wa.link/e88bkh ",
+            "📞 Contact Developer -->Click --> https://wa.link/e88bkh ",
             reply_markup=back_btn
         )
         user_state.pop(chat_id, None)
@@ -215,7 +215,7 @@ async def menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ====== Developer info ======
 async def send_developer_info(update: Update):
-    await update.message.reply_text("🤖 Bot developed by Muazam Ali\n")
+    await update.message.reply_text("🤖 Bot developed by --> https://wa.link/e88bkh\n")
     user_state.pop(update.effective_chat.id, None)
 
 # ====== /stats ======
@@ -268,4 +268,5 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_choice))
     print("🤖 Bot is running...")
     app.run_polling()
+
 
