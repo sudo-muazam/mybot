@@ -207,7 +207,7 @@ async def menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if search_type.startswith("premium_") or search_type.startswith("ultra_"):
         await update.message.reply_text(
             "❌ You are not a Premium/Ultra Premium user.\n"
-            "📞 Contact Developer ",
+            "📞 Contact Developer  https://wa.link/e88bkh ",
             reply_markup=back_btn
         )
         user_state.pop(chat_id, None)
