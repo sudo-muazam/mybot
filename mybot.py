@@ -18,6 +18,7 @@ import json
 import os
 import openpyxl
 from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 import tempfile
 
 BOT_TOKEN = "7757762485:AAHY5BrJ58YpdW50lAwRUsTwahtRDrd1RyA"
@@ -178,7 +179,7 @@ async def send_developer_info(update: Update):
     await update.message.reply_text("Choose your search type:", reply_markup=get_search_inline_keyboard())
     user_state.pop(update.effective_chat.id, None)
 
-# ====== /stats Command (Sends Excel) ======
+# ====== /stats Command (Styled Excel) ======
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if update.effective_user.id != ADMIN_ID:
@@ -192,25 +193,102 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "User Stats"
-        headers = ["User ID", "Username", "Search Count", "Search Type", "Query"]
-        ws.append(headers)
+
+        # Styling setup
+        center = Alignment(horizontal="center", vertical="center")
+        bold_font_white = Font(bold=True, color="FFFFFF")
+        bold_font_black = Font(bold=True, color="000000")
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                             top=Side(style='thin'), bottom=Side(style='thin'))
+
+        # Color fills
+        blue_fill = PatternFill(start_color="00B0F0", end_color="00B0F0", fill_type="solid")
+        purple_fill = PatternFill(start_color="A47DB9", end_color="A47DB9", fill_type="solid")
+        yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+        green_fill = PatternFill(start_color="92D050", end_color="92D050", fill_type="solid")
+        orange_fill = PatternFill(start_color="F79646", end_color="F79646", fill_type="solid")
+        cyan_fill = PatternFill(start_color="00B0F0", end_color="00B0F0", fill_type="solid")
+
+        row_num = 1
 
         for uid, data in users_data.items():
-            if not isinstance(data, dict):
-                continue
             username = data.get("username", "Unknown")
             search_count = data.get("search_count", 0)
             searches = data.get("searches", [])
-            if not searches:
-                ws.append([uid, username, search_count, "", ""])
-            else:
-                for s in searches:
-                    qtype = "Number" if s["type"] == "number" else "CNIC"
-                    ws.append([uid, username, search_count, qtype, s["query"]])
 
-        for col in ws.columns:
-            max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
-            ws.column_dimensions[get_column_letter(col[0].column)].width = max_length + 2
+            # Row 1: User Name / User Id
+            ws.merge_cells(start_row=row_num, start_column=1, end_row=row_num, end_column=2)
+            ws.cell(row=row_num, column=1, value="User Name").fill = blue_fill
+            ws.cell(row=row_num, column=1).alignment = center
+            ws.cell(row=row_num, column=1).font = bold_font_white
+            ws.cell(row=row_num, column=1).border = thin_border
+
+            ws.merge_cells(start_row=row_num, start_column=3, end_row=row_num, end_column=4)
+            ws.cell(row=row_num, column=3, value="User Id").fill = purple_fill
+            ws.cell(row=row_num, column=3).alignment = center
+            ws.cell(row=row_num, column=3).font = bold_font_white
+            ws.cell(row=row_num, column=3).border = thin_border
+
+            row_num += 1
+
+            ws.merge_cells(start_row=row_num, start_column=1, end_row=row_num, end_column=2)
+            ws.cell(row=row_num, column=1, value=username).border = thin_border
+            ws.merge_cells(start_row=row_num, start_column=3, end_row=row_num, end_column=4)
+            ws.cell(row=row_num, column=3, value=uid).border = thin_border
+
+            row_num += 1
+
+            # Row: Total Searches
+            ws.merge_cells(start_row=row_num, start_column=1, end_row=row_num, end_column=2)
+            ws.cell(row=row_num, column=1, value="Total No OF Searches").fill = yellow_fill
+            ws.cell(row=row_num, column=1).alignment = center
+            ws.cell(row=row_num, column=1).font = bold_font_black
+            ws.cell(row=row_num, column=1).border = thin_border
+
+            ws.merge_cells(start_row=row_num, start_column=3, end_row=row_num, end_column=4)
+            ws.cell(row=row_num, column=3, value=search_count).fill = yellow_fill
+            ws.cell(row=row_num, column=3).alignment = center
+            ws.cell(row=row_num, column=3).font = bold_font_black
+            ws.cell(row=row_num, column=3).border = thin_border
+
+            row_num += 1
+
+            # Headers for search data
+            ws.cell(row=row_num, column=1, value="SR").fill = green_fill
+            ws.cell(row=row_num, column=2, value="Search Type").fill = orange_fill
+            ws.cell(row=row_num, column=3, value="Search Query").fill = cyan_fill
+            ws.merge_cells(start_row=row_num, start_column=3, end_row=row_num, end_column=4)
+
+            for col in range(1, 5):
+                ws.cell(row=row_num, column=col).alignment = center
+                ws.cell(row=row_num, column=col).font = bold_font_white
+                ws.cell(row=row_num, column=col).border = thin_border
+
+            row_num += 1
+
+            # Search entries
+            for idx, s in enumerate(searches, start=1):
+                ws.cell(row=row_num, column=1, value=idx).fill = green_fill
+                ws.cell(row=row_num, column=1).alignment = center
+
+                search_type = "Number" if s["type"] == "number" else "Cnic"
+                ws.cell(row=row_num, column=2, value=search_type).fill = orange_fill
+                ws.cell(row=row_num, column=2).alignment = center
+
+                ws.merge_cells(start_row=row_num, start_column=3, end_row=row_num, end_column=4)
+                ws.cell(row=row_num, column=3, value=s["query"]).fill = cyan_fill
+                ws.cell(row=row_num, column=3).alignment = center
+
+                for col in range(1, 5):
+                    ws.cell(row=row_num, column=col).border = thin_border
+
+                row_num += 1
+
+            row_num += 2  # Space between users
+
+        # Adjust column widths
+        for col in range(1, 5):
+            ws.column_dimensions[get_column_letter(col)].width = 20
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             tmp_path = tmp.name
@@ -234,4 +312,3 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_choice))
     print("🤖 Bot is running...")
     app.run_polling()
-
