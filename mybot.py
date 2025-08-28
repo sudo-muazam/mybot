@@ -173,7 +173,7 @@ async def menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ====== Developer info ======
 async def send_developer_info(update: Update):
-    developer_msg = "🤖 Bot developed by Muazam Ali\n📞 WhatsApp: +923067632070"
+    developer_msg = "🤖 Bot developed by Muazam Ali\n📞 WhatsApp: "
     await update.message.reply_text(developer_msg)
     await update.message.reply_text("Choose your search type:", reply_markup=get_search_inline_keyboard())
     user_state.pop(update.effective_chat.id, None)
@@ -234,3 +234,4 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_choice))
     print("🤖 Bot is running...")
     app.run_polling()
+
