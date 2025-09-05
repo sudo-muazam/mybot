@@ -23,12 +23,13 @@ import tempfile
 
 BOT_TOKEN = "7757762485:AAHY5BrJ58YpdW50lAwRUsTwahtRDrd1RyA"
 ADMIN_ID = 6550324099
+
 user_state = {}
 
 STATS_FILE = "stats.json"
 users_data = {}
 
-# ====== Load stats from file ======
+# ====== Load stats ======
 def load_stats():
     global users_data
     if not os.path.isfile(STATS_FILE):
@@ -37,34 +38,56 @@ def load_stats():
     try:
         with open(STATS_FILE, "r") as f:
             data = json.load(f)
-            if isinstance(data, dict):
-                users_data = data
-            else:
-                print("Warning: stats.json content is not a dict. Resetting data.")
-                users_data = {}
-    except Exception as e:
-        print(f"Error loading stats.json: {e}")
+            users_data = data if isinstance(data, dict) else {}
+    except:
         users_data = {}
 
-# ====== Save stats to file ======
+# ====== Save stats ======
 def save_stats():
     try:
         with open(STATS_FILE, "w") as f:
             json.dump(users_data, f, indent=2)
-    except Exception as e:
-        print(f"Error saving stats.json: {e}")
+    except:
+        pass
 
-# ====== Inline Keyboard ======
-def get_search_inline_keyboard():
+# ====== Inline Keyboards ======
+def get_main_inline_keyboard():
     keyboard = [
         [
-            InlineKeyboardButton("🔍 Search by Number", callback_data="search_number"),
-            InlineKeyboardButton("🆔 Search by CNIC", callback_data="search_cnic"),
+            InlineKeyboardButton("🆓 Free Search", callback_data="free"),
+            InlineKeyboardButton("💎 Premium Search", callback_data="premium"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# ====== /start Command ======
+def get_free_inline_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton("📱 Search by Number", callback_data="search_number"),
+            InlineKeyboardButton("🆔 Search by CNIC", callback_data="search_cnic"),
+        ],
+        [InlineKeyboardButton("⬅ Back", callback_data="back_main")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_premium_inline_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton("🤖 Auto", callback_data="premium_auto"),
+            InlineKeyboardButton("☎ PTCL Detail", callback_data="premium_ptcl"),
+        ],
+        [
+            InlineKeyboardButton("📱 Number Ownership", callback_data="premium_number"),
+            InlineKeyboardButton("🚗 Vehicle Detail", callback_data="premium_vehicle"),
+        ],
+        [
+            InlineKeyboardButton("🆔 CNIC Detail", callback_data="premium_cnic"),
+        ],
+        [InlineKeyboardButton("⬅ Back", callback_data="back_main")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# ====== /start ======
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = str(user.id)
@@ -79,26 +102,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_state.pop(update.effective_chat.id, None)
     await update.message.reply_text(
-        "👋 Welcome! Please choose an option to search:",
-        reply_markup=get_search_inline_keyboard()
+        "👋 Welcome! Please choose an option:",
+        reply_markup=get_main_inline_keyboard()
     )
 
-# ====== Callback Query Handler ======
+# ====== Callback Handler ======
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     chat_id = query.message.chat_id
 
-    if query.data == "search_number":
-        user_state[chat_id] = "number"
+    # Free vs Premium
+    if query.data == "free":
+        await query.message.reply_text("🆓 Free Search Options:", reply_markup=get_free_inline_keyboard())
+    elif query.data == "premium":
+        await query.message.reply_text("💎 Premium Search Options:", reply_markup=get_premium_inline_keyboard())
+    elif query.data == "back_main":
+        await query.message.reply_text("⬅ Back to Main Menu:", reply_markup=get_main_inline_keyboard())
+
+    # Free Search options
+    elif query.data == "search_number":
+        user_state[chat_id] = ("free", "number")
         await query.message.reply_text("📱 Please enter the mobile number (10 or 11 digits):", reply_markup=ReplyKeyboardRemove())
     elif query.data == "search_cnic":
-        user_state[chat_id] = "cnic"
-        await query.message.reply_text("🆔 Please enter the CNIC number (13 digits, without dashes):", reply_markup=ReplyKeyboardRemove())
-    else:
-        await query.message.reply_text("⚠ Unknown option selected.")
+        user_state[chat_id] = ("free", "cnic")
+        await query.message.reply_text("🆔 Please enter the CNIC number (13 digits):", reply_markup=ReplyKeyboardRemove())
 
-# ====== Handler for searches ======
+    # Premium Search options
+    elif query.data.startswith("premium_"):
+        api_type = query.data.replace("premium_", "")
+        user_state[chat_id] = ("premium", api_type)
+        await query.message.reply_text(f"💎 Please enter query for {api_type.title()} search:", reply_markup=ReplyKeyboardRemove())
+    else:
+        await query.message.reply_text("⚠ Unknown option.")
+
+# ====== Handle searches ======
 async def menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
@@ -113,95 +151,131 @@ async def menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_stats()
 
     if chat_id not in user_state:
-        await update.message.reply_text("⚠ Please start by typing /start and selecting an option:", reply_markup=get_search_inline_keyboard())
+        await update.message.reply_text("⚠ Please type /start and select an option.", reply_markup=get_main_inline_keyboard())
         return
 
-    search_type = user_state[chat_id]
+    mode, search_type = user_state[chat_id]
 
-    if search_type == "number":
-        if not text.isdigit() or len(text) not in [10, 11]:
-            await update.message.reply_text("❌ Invalid mobile number. Enter 10 or 11 digits.")
-            return
-    elif search_type == "cnic":
-        if not text.isdigit() or len(text) != 13:
-            await update.message.reply_text("❌ Invalid CNIC. Enter exactly 13 digits.")
-            return
+    # ===== Free Search =====
+    if mode == "free":
+        if search_type == "number":
+            if not text.isdigit() or len(text) not in [10, 11]:
+                await update.message.reply_text("❌ Invalid number. Enter 10 or 11 digits.")
+                return
+        elif search_type == "cnic":
+            if not text.isdigit() or len(text) != 13:
+                await update.message.reply_text("❌ Invalid CNIC. Enter exactly 13 digits.")
+                return
 
-    users_data[user_id]["search_count"] += 1
-    users_data[user_id]["searches"].append({"type": search_type, "query": text})
-    save_stats()
+        users_data[user_id]["search_count"] += 1
+        users_data[user_id]["searches"].append({"type": search_type, "query": text})
+        save_stats()
 
-    await update.message.reply_text("🔍 Searching... Please wait.")
+        await update.message.reply_text("🔍 Searching (Free)... Please wait.")
 
-    url = "https://minahalsimdata.com.pk/sim-info/"
-    payload = {"searchinfo": text}
+        url = "https://minahalsimdata.com.pk/sim-info/"
+        payload = {"searchinfo": text}
+        try:
+            response = requests.post(url, data=payload)
+            soup = BeautifulSoup(response.text, "html.parser")
+            result_containers = soup.find_all("div", class_="resultcontainer")
 
-    try:
-        response = requests.post(url, data=payload)
-        soup = BeautifulSoup(response.text, "html.parser")
+            if not result_containers:
+                await update.message.reply_text("⚠ No result found.")
+                await send_developer_info(update)
+                return
 
-        result_containers = soup.find_all("div", class_="resultcontainer")
-        if not result_containers:
-            await update.message.reply_text("⚠ No result found.")
+            result_text = ""
+            for container in result_containers:
+                rows = container.find_all("div", class_="row")
+                record = {}
+                for row in rows:
+                    head = row.find("span", class_="detailshead")
+                    value = row.find("span", class_="details")
+                    if head and value:
+                        record[head.get_text(strip=True).replace(":", "")] = value.get_text(strip=True)
+
+                result_text += (
+                    f"👤 Name: {record.get('Name', 'N/A')}\n"
+                    f"📱 Mobile: {record.get('Mobile', 'N/A')}\n"
+                    f"🌍 Country: {record.get('Country', 'N/A')}\n"
+                    f"🆔 CNIC: {record.get('CNIC', 'N/A')}\n"
+                    f"🏠 Address: {record.get('Address', 'N/A')}\n\n"
+                )
+
+            await update.message.reply_text(result_text.strip() or "⚠ No data found.")
             await send_developer_info(update)
-            return
 
-        result_text = ""
-        for container in result_containers:
-            rows = container.find_all("div", class_="row")
-            record = {}
-            for row in rows:
-                head = row.find("span", class_="detailshead")
-                value = row.find("span", class_="details")
-                if head and value:
-                    record[head.get_text(strip=True).replace(":", "")] = value.get_text(strip=True)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            await send_developer_info(update)
 
-            # Format record
-            result_text += (
-                f"👤 Name: {record.get('Name', 'N/A')}\n"
-                f"📱 Mobile: {record.get('Mobile', 'N/A')}\n"
-                f"🌍 Country: {record.get('Country', 'N/A')}\n"
-                f"🆔 CNIC: {record.get('CNIC', 'N/A')}\n"
-                f"🏠 Address: {record.get('Address', 'N/A')}\n\n"
-            )
+    # ===== Premium Search =====
+    elif mode == "premium":
+        users_data[user_id]["search_count"] += 1
+        users_data[user_id]["searches"].append({"type": f"premium_{search_type}", "query": text})
+        save_stats()
 
-        await update.message.reply_text(result_text.strip() or "⚠ No data found.")
-        await send_developer_info(update)
+        await update.message.reply_text(f"🔍 Searching (Premium - {search_type.title()})...")
 
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error occurred: {e}")
-        await send_developer_info(update)
+        url = "https://dbfather.42web.io/"
+        payload = {"api": search_type, "searchQuery": text}
 
-# ====== Developer info ======
+        try:
+            response = requests.post(url, data=payload)
+            soup = BeautifulSoup(response.text, "html.parser")
+            tables = soup.find_all("table")
+
+            if not tables:
+                await update.message.reply_text("⚠ No result found.")
+                await send_developer_info(update)
+                return
+
+            result_text = ""
+            for table in tables:
+                rows = table.find_all("tr")
+                for row in rows:
+                    cols = row.find_all("td")
+                    if len(cols) == 2:
+                        key = cols[0].get_text(strip=True)
+                        val = cols[1].get_text(strip=True)
+                        result_text += f"{key}: {val}\n"
+                result_text += "\n"
+
+            await update.message.reply_text(result_text.strip() or "⚠ No data found.")
+            await send_developer_info(update)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            await send_developer_info(update)
+
+# ===== Developer info =====
 async def send_developer_info(update: Update):
     developer_msg = "🤖 Bot developed by Muazam Ali\n📞 WhatsApp: "
     await update.message.reply_text(developer_msg)
-    await update.message.reply_text("Choose your search type:", reply_markup=get_search_inline_keyboard())
+    await update.message.reply_text("Choose search type:", reply_markup=get_main_inline_keyboard())
     user_state.pop(update.effective_chat.id, None)
 
-# ====== /stats Command (Styled Excel) ======
+# ====== Stats Command ======
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if update.effective_user.id != ADMIN_ID:
-            await update.message.reply_text("⛔ You are not authorized to view stats.")
+            await update.message.reply_text("⛔ Unauthorized.")
             return
-
         if not users_data:
-            await update.message.reply_text("No users or searches recorded yet.")
+            await update.message.reply_text("No users yet.")
             return
 
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "User Stats"
 
-        # Styling setup
         center = Alignment(horizontal="center", vertical="center")
         bold_font_white = Font(bold=True, color="FFFFFF")
         bold_font_black = Font(bold=True, color="000000")
         thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
                              top=Side(style='thin'), bottom=Side(style='thin'))
 
-        # Color fills
         blue_fill = PatternFill(start_color="00B0F0", end_color="00B0F0", fill_type="solid")
         purple_fill = PatternFill(start_color="A47DB9", end_color="A47DB9", fill_type="solid")
         yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
@@ -216,7 +290,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             search_count = data.get("search_count", 0)
             searches = data.get("searches", [])
 
-            # Row 1: User Name / User Id
             ws.merge_cells(start_row=row_num, start_column=1, end_row=row_num, end_column=2)
             ws.cell(row=row_num, column=1, value="User Name").fill = blue_fill
             ws.cell(row=row_num, column=1).alignment = center
@@ -238,9 +311,8 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             row_num += 1
 
-            # Row: Total Searches
             ws.merge_cells(start_row=row_num, start_column=1, end_row=row_num, end_column=2)
-            ws.cell(row=row_num, column=1, value="Total No OF Searches").fill = yellow_fill
+            ws.cell(row=row_num, column=1, value="Total Searches").fill = yellow_fill
             ws.cell(row=row_num, column=1).alignment = center
             ws.cell(row=row_num, column=1).font = bold_font_black
             ws.cell(row=row_num, column=1).border = thin_border
@@ -253,7 +325,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             row_num += 1
 
-            # Headers for search data
             ws.cell(row=row_num, column=1, value="SR").fill = green_fill
             ws.cell(row=row_num, column=2, value="Search Type").fill = orange_fill
             ws.cell(row=row_num, column=3, value="Search Query").fill = cyan_fill
@@ -266,13 +337,11 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             row_num += 1
 
-            # Search entries
             for idx, s in enumerate(searches, start=1):
                 ws.cell(row=row_num, column=1, value=idx).fill = green_fill
                 ws.cell(row=row_num, column=1).alignment = center
 
-                search_type = "Number" if s["type"] == "number" else "Cnic"
-                ws.cell(row=row_num, column=2, value=search_type).fill = orange_fill
+                ws.cell(row=row_num, column=2, value=s["type"]).fill = orange_fill
                 ws.cell(row=row_num, column=2).alignment = center
 
                 ws.merge_cells(start_row=row_num, start_column=3, end_row=row_num, end_column=4)
@@ -284,9 +353,8 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 row_num += 1
 
-            row_num += 2  # Space between users
+            row_num += 2
 
-        # Adjust column widths
         for col in range(1, 5):
             ws.column_dimensions[get_column_letter(col)].width = 20
 
