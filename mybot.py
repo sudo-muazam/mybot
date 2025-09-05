@@ -29,6 +29,26 @@ user_state = {}
 STATS_FILE = "stats.json"
 users_data = {}
 
+# ====== Persistent session for dbfather ======
+dbfather_session = requests.Session()
+dbfather_logged_in = False
+
+def login_dbfather():
+    global dbfather_logged_in
+    try:
+        login_url = "https://dbfather.42web.io/"
+        payload = {
+            "userId": "1582832816",
+            "force_login": "1",
+            "login": "لاگ اِن"
+        }
+        resp = dbfather_session.post(login_url, data=payload, timeout=10)
+        if resp.status_code == 200:
+            dbfather_logged_in = True
+    except Exception as e:
+        dbfather_logged_in = False
+        print(f"Login error: {e}")
+
 # ====== Load stats ======
 def load_stats():
     global users_data
@@ -219,10 +239,14 @@ async def menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🔍 Searching (Premium - {search_type.title()})...")
 
         url = "https://dbfather.42web.io/"
-        payload = {"api": search_type, "searchQuery": text}
 
         try:
-            response = requests.post(url, data=payload)
+            # Ensure logged in
+            if not dbfather_logged_in:
+                login_dbfather()
+
+            payload = {"api": search_type, "searchQuery": text}
+            response = dbfather_session.post(url, data=payload, timeout=15)
             soup = BeautifulSoup(response.text, "html.parser")
             tables = soup.find_all("table")
 
@@ -235,7 +259,7 @@ async def menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for table in tables:
                 rows = table.find_all("tr")
                 for row in rows:
-                    cols = row.find_all("td")
+                    cols = row.find_all(["td", "th"])
                     if len(cols) == 2:
                         key = cols[0].get_text(strip=True)
                         val = cols[1].get_text(strip=True)
@@ -373,6 +397,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ====== Main ======
 if __name__ == "__main__":
     load_stats()
+    login_dbfather()  # login once at startup
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats_command))
