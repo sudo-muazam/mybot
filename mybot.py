@@ -37,17 +37,37 @@ def login_dbfather():
     global dbfather_logged_in
     try:
         login_url = "https://dbfather.42web.io/"
+        
+        # Step 1: GET login page to grab CSRF token
+        resp = dbfather_session.get(login_url, timeout=10)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        token_input = soup.find("input", {"name": "csrf_token"})
+        csrf_token = token_input["value"] if token_input else None
+
+        if not csrf_token:
+            print("❌ Could not find csrf_token")
+            dbfather_logged_in = False
+            return
+
+        # Step 2: POST login with token
         payload = {
             "userId": "1582832816",
             "force_login": "1",
-            "login": "لاگ اِن"
+            "login": "لاگ اِن",
+            "csrf_token": csrf_token
         }
         resp = dbfather_session.post(login_url, data=payload, timeout=10)
+
         if resp.status_code == 200:
             dbfather_logged_in = True
+            print("✅ Logged in successfully")
+        else:
+            dbfather_logged_in = False
+            print(f"❌ Login failed, status {resp.status_code}")
     except Exception as e:
         dbfather_logged_in = False
         print(f"Login error: {e}")
+
 
 # ====== Load stats ======
 def load_stats():
@@ -405,3 +425,4 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_choice))
     print("🤖 Bot is running...")
     app.run_polling()
+
